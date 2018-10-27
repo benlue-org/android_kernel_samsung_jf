@@ -1781,10 +1781,9 @@ config MSM_CPU_FREQ_MAX
 config MSM_CPU_FREQ_MIN
 	int "Min CPU Frequency"
 	depends on MSM_CPU_FREQ_SET_MIN_MAX
-	default 270000
+	default 384000
 
 endif # CPU_FREQ_MSM
-
 
 config MSM_CPUFREQ_LIMITER
 	tristate "MSM CPU frequency limiter"
@@ -2849,6 +2848,12 @@ config MSM_USE_USER_ACCESSIBLE_TIMERS
 	  Enables MSM-specific user accessible timers via a shared
 	  memory page containing the cycle counter.
 
+config LCD_KCAL
+	tristate "MSM generic LCDC Calibration"
+	default n
+	help
+	  Enable MSM generic LCDC temperature Calibration.
+	  
 config SEC_THERMISTOR
 	bool "Use external thermistor near AP for checking temprature"
 	default n

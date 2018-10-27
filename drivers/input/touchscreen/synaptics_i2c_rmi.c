@@ -23,10 +23,6 @@
 #include <linux/input/mt.h>
 #include <linux/gpio.h>
 #include <linux/regulator/consumer.h>
-#ifdef CONFIG_FB
-#include <linux/notifier.h>
-#include <linux/fb.h>
-#endif
 #include "synaptics_i2c_rmi.h"
 
 #define DRIVER_NAME "synaptics_rmi4_i2c"
@@ -536,7 +532,6 @@ struct synaptics_rmi4_exp_fn {
 };
 
 static struct device_attribute attrs[] = {
-
 #ifdef PROXIMITY
 	__ATTR(proximity_enables, (S_IRUGO | S_IWUSR | S_IWGRP),
 			synaptics_rmi4_f51_enables_show,
@@ -570,7 +565,6 @@ static struct list_head exp_fn_list;
 #ifdef PROXIMITY
 static struct synaptics_rmi4_f51_handle *f51;
 #endif
-
 
 #ifdef PROXIMITY
 static ssize_t synaptics_rmi4_f51_enables_show(struct device *dev,
@@ -3533,7 +3527,6 @@ int synaptics_rmi4_new_function(enum exp_fn fn_type,
 	return 0;
 }
 
-
  /**
  * synaptics_rmi4_probe()
  *
@@ -3691,7 +3684,6 @@ static int __devinit synaptics_rmi4_probe(struct i2c_client *client,
 	rmi4_data->callbacks.inform_charger = synaptics_ta_cb;
 	if (rmi4_data->register_cb)
 		rmi4_data->register_cb(&rmi4_data->callbacks);
-
 
 	/* for blocking to be excuted open function until probing */
 	complete_all(&rmi4_data->init_done);
@@ -3937,6 +3929,7 @@ static void synaptics_rmi4_input_close(struct input_dev *dev)
 	}
 }
 #endif
+
 #ifdef CONFIG_FB
  /**
  * synaptics_rmi4_suspend()
@@ -4024,32 +4017,20 @@ static int fb_notifier_callback(struct notifier_block *self,
 {
 	struct fb_event *evdata = data;
 	int *blank;
-	int new_status;
-	struct synaptics_rmi4_data *synaptics_rmi4_ts_data = container_of(self, struct synaptics_rmi4_data, fb_notif);
-	if (evdata && evdata->data && data && synaptics_rmi4_ts_data->i2c_client) {
+	struct synaptics_rmi4_data *synaptics_rmi4_ts_data =
+		container_of(self, struct synaptics_rmi4_data, fb_notif);
+
+	if (evdata && evdata->data && event == FB_EVENT_BLANK &&
+		synaptics_rmi4_ts_data && synaptics_rmi4_ts_data->i2c_client) {
 		blank = evdata->data;
-		switch (*blank) {
-			case FB_BLANK_UNBLANK:
-			case FB_BLANK_NORMAL:
-			case FB_BLANK_VSYNC_SUSPEND:
-			case FB_BLANK_HSYNC_SUSPEND:
-				new_status = 0;
-				break;
-			default:
-			case FB_BLANK_POWERDOWN:
-				new_status = 1;
-				break;
-		}
-		if (event == FB_EVENT_BLANK) {
-			if (!new_status)
-				synaptics_rmi4_resume(&synaptics_rmi4_ts_data->i2c_client->dev);
-			else
-				synaptics_rmi4_suspend(&synaptics_rmi4_ts_data->i2c_client->dev);
-		}
+		if (*blank == FB_BLANK_UNBLANK)
+			synaptics_rmi4_resume(&synaptics_rmi4_ts_data->i2c_client->dev);
+		else if (*blank == FB_BLANK_POWERDOWN)
+			synaptics_rmi4_suspend(&synaptics_rmi4_ts_data->i2c_client->dev);
 	}
+
 	return 0;
 }
-
 #endif
 
 #if (!defined(CONFIG_FB) && !defined(CONFIG_HAS_EARLYSUSPEND))

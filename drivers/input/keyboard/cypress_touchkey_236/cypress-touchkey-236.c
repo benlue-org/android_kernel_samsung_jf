@@ -111,9 +111,13 @@ struct cypress_touchkey_info {
 	struct led_classdev			leds;
 	enum led_brightness			brightness;
 	struct mutex			touchkey_led_mutex;
-	struct mutex            lock;
+	struct mutex			lock;
 	struct workqueue_struct			*led_wq;
 	struct work_struct			led_work;
+
+#ifdef CONFIG_FB
+	struct notifier_block fb_notif;
+#endif
 
 #if defined(CONFIG_GLOVE_TOUCH)
 	struct workqueue_struct		*glove_wq;
@@ -134,11 +138,6 @@ struct cypress_touchkey_info {
 #endif
 
 	atomic_t keypad_enable;
-
-#ifdef CONFIG_FB
-struct notifier_block fb_notif;
-#endif
-
 };
 
 #ifdef CONFIG_FB
@@ -1438,7 +1437,6 @@ static int __devinit cypress_touchkey_probe(struct i2c_client *client,
 	set_bit(LED_MISC, input_dev->ledbit);
 
 	atomic_set(&info->keypad_enable, 1);
-	info->enabled = true;
 	mutex_init(&info->lock);
 
 	for (i = 0; i < ARRAY_SIZE(info->keycode); i++)
@@ -1839,11 +1837,11 @@ static int cypress_touchkey_suspend(struct device *dev)
 	int ret = 0;
 
 	mutex_lock(&info->lock);
+
 	if (unlikely(!info->enabled)) {
 		dev_info(&client->dev, "%s, already disabled.\n", __func__);
 		goto out;
 	}
-	info->enabled = false;
 
 	info->is_powering_on = true;
 	disable_irq(info->irq);
@@ -1867,6 +1865,7 @@ static int cypress_touchkey_resume(struct device *dev)
 	int ret = 0;
 
 	mutex_lock(&info->lock);
+
 	if (unlikely(info->enabled)) {
 		dev_info(&client->dev, "%s, already enabled.\n", __func__);
 		goto out;
@@ -1910,9 +1909,10 @@ static int cypress_touchkey_resume(struct device *dev)
 */
 	enable_irq(info->irq);
 
+	info->is_powering_on = false;
+
 out:
 	mutex_unlock(&info->lock);
-	info->is_powering_on = false;
 	return ret;
 }
 
@@ -1921,30 +1921,18 @@ static int fb_notifier_callback(struct notifier_block *self,
 {
 	struct fb_event *evdata = data;
 	int *blank;
-	int new_status;
-	struct cypress_touchkey_info *cypress_touchkey_tk_data = container_of(self, struct cypress_touchkey_info, fb_notif);
-	if (evdata && evdata->data && data && cypress_touchkey_tk_data->client) {
+	struct cypress_touchkey_info *cypress_touchkey_tk_data =
+		container_of(self, struct cypress_touchkey_info, fb_notif);
+
+	if (evdata && evdata->data && event == FB_EVENT_BLANK &&
+		cypress_touchkey_tk_data && cypress_touchkey_tk_data->client) {
 		blank = evdata->data;
-		switch (*blank) {
-			case FB_BLANK_UNBLANK:
-			case FB_BLANK_NORMAL:
-			case FB_BLANK_VSYNC_SUSPEND:
-			case FB_BLANK_HSYNC_SUSPEND:
-				new_status = 0;
-				break;
-			default:
-			case FB_BLANK_POWERDOWN:
-				new_status = 1;
-				break;
-		}
-		if (event == FB_EVENT_BLANK) {
-			if (!new_status) {
-				cypress_touchkey_resume(&cypress_touchkey_tk_data->client->dev);
-			} else {
-				cypress_touchkey_suspend(&cypress_touchkey_tk_data->client->dev);
-                        }
-		}
+		if (*blank == FB_BLANK_UNBLANK)
+			cypress_touchkey_resume(&cypress_touchkey_tk_data->client->dev);
+		else if (*blank == FB_BLANK_POWERDOWN)
+			cypress_touchkey_suspend(&cypress_touchkey_tk_data->client->dev);
 	}
+
 	return 0;
 }
 #endif
